@@ -12,4 +12,4 @@ PROXY_READ_TIMEOUT=60s docker compose up --build
 
 Open http://127.0.0.1:8080
 
-The step-by-step tests are in [RUNBOOK.md](RUNBOOK.md). Write results in [FINDINGS.md](FINDINGS.md). Do not fill findings before the runs.
+The step-by-step tests are in [RUNBOOK.md](RUNBOOK.md). The grid of runs is in [SCENARIOS.md](SCENARIOS.md). Write results in [FINDINGS.md](FINDINGS.md). Do not fill findings before the runs.
