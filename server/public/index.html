@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SSE Simulation</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px/1.4 system-ui, sans-serif; margin: 0; padding: 16px; max-width: 720px; }
+    h1 { font-size: 1.25rem; margin: 0 0 8px; }
+    p { margin: 0 0 12px; }
+    label { display: block; margin: 10px 0; }
+    select, input, button, textarea { font: inherit; }
+    input[type="text"], select, textarea { width: 100%; box-sizing: border-box; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+    button { padding: 10px 12px; }
+    #state { font-weight: 700; }
+    textarea { min-height: 240px; }
+    .hint { font-size: 0.9rem; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <h1>SSE Simulation</h1>
+  <p class="hint">This page is the app. It only connects and shows what arrives. Statuses appear on their own.</p>
+  <ul class="hint">
+    <li><b>This page</b> is the client (the Suki app).</li>
+    <li><b>nginx</b> on port 8080 is ms-gateway. It forwards the stream and can cut a quiet connection.</li>
+    <li><b>The Node server</b> behind nginx is ms-notifications. It holds the open stream.</li>
+    <li><b>A timer in that server</b> is ms-jobber. Every few seconds it reports an ambient note status.</li>
+  </ul>
+  <p>State: <span id="state">closed</span> · last byte <span id="silence">—</span> · last_seq <span id="seq">—</span></p>
+
+  <label>Client
+    <select id="mode">
+      <option value="eventsource">EventSource (browser reconnects by itself, no Authorization header)</option>
+      <option value="fetch" selected>fetch (manual read, can send headers)</option>
+    </select>
+  </label>
+  <div class="row">
+    <button id="connect" type="button">Connect</button>
+    <button id="disconnect" type="button">Disconnect</button>
+  </div>
+  <div class="row">
+    <button id="copy" type="button">Copy log</button>
+    <button id="clear" type="button">Clear log</button>
+  </div>
+  <textarea id="log" readonly></textarea>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    $("seq").textContent = sessionStorage.getItem("sse-last-seq") || "—";
+
+    let source = null;
+    let abort = null;
+    let manual = false;
+    let generation = 0;
+    let connectionId = "";
+    let lastByte = 0;
+    let link = "closed";
+    let silenceLogged = false;
+    let serverHeartbeatMs = 0;
+    let watchdog = 0;
+
+    function lastSeq() {
+      return sessionStorage.getItem("sse-last-seq") || "";
+    }
+
+    function setSeq(value) {
+      sessionStorage.setItem("sse-last-seq", value);
+      $("seq").textContent = value || "—";
+    }
+
+    function setLink(value) {
+      link = value;
+      $("state").textContent = value;
+    }
+
+    function log(message) {
+      const line = new Date().toISOString() + "  " + message + "\n";
+      $("log").value += line;
+      $("log").scrollTop = $("log").scrollHeight;
+    }
+
+    function noteByte(why) {
+      lastByte = Date.now();
+      silenceLogged = false;
+      if (link === "silent" || link === "reconnecting") setLink("open");
+      if (why) log(why);
+    }
+
+    function streamUrl() {
+      const url = new URL("/stream", location.origin);
+      const seq = lastSeq();
+      if (seq) url.searchParams.set("last_seq", seq);
+      return url;
+    }
+
+    function applyFrame(eventName, data) {
+      let body = {};
+      try { body = JSON.parse(data); } catch { body = { raw: data }; }
+      if (eventName === "hello") {
+        connectionId = body.connectionId || "";
+        if (body.heartbeatMs != null) serverHeartbeatMs = Number(body.heartbeatMs);
+        if (body.watchdog != null) watchdog = Number(body.watchdog);
+        log("connected");
+        return;
+      }
+      if (eventName === "status") {
+        if (body.seq) setSeq(body.seq);
+        log("received " + body.text);
+      }
+    }
+
+    function stopCurrent() {
+      manual = true;
+      generation += 1;
+      if (source) {
+        source.close();
+        source = null;
+      }
+      if (abort) {
+        abort.abort();
+        abort = null;
+      }
+    }
+
+    function connectEventSource() {
+      const gen = generation;
+      const url = streamUrl();
+      log("EventSource open " + url.pathname + url.search);
+      const es = new EventSource(url);
+      source = es;
+      es.onopen = () => {
+        if (gen !== generation) return;
+        noteByte();
+        setLink("open");
+        log("EventSource open readyState=" + es.readyState);
+      };
+      es.onerror = () => {
+        if (gen !== generation) return;
+        log("EventSource error readyState=" + es.readyState + " (0=connecting, 1=open, 2=closed)");
+        if (es.readyState === EventSource.CONNECTING) setLink("reconnecting");
+        if (es.readyState === EventSource.CLOSED) setLink("closed");
+      };
+      es.addEventListener("hello", (event) => {
+        noteByte();
+        applyFrame("hello", event.data);
+      });
+      es.addEventListener("status", (event) => {
+        noteByte();
+        applyFrame("status", event.data);
+      });
+    }
+
+    async function connectFetch() {
+      const gen = generation;
+      manual = false;
+      const url = streamUrl();
+      const controller = new AbortController();
+      abort = controller;
+      const headers = { Accept: "text/event-stream" };
+      const seq = lastSeq();
+      if (seq) headers["Last-Event-ID"] = seq;
+      log("fetch open " + url.pathname + url.search + (seq ? " Last-Event-ID=" + seq : ""));
+      setLink(seq ? "reconnecting" : "open");
+      try {
+        const response = await fetch(url, { headers, signal: controller.signal, cache: "no-store" });
+        if (!response.ok || !response.body) throw new Error("HTTP " + response.status);
+        noteByte();
+        setLink("open");
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let pending = "";
+        let eventName = "message";
+        let data = "";
+        const flush = () => {
+          if (data) applyFrame(eventName, data);
+          eventName = "message";
+          data = "";
+        };
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          noteByte();
+          pending += decoder.decode(value, { stream: true });
+          const lines = pending.split(/\r?\n/);
+          pending = lines.pop();
+          for (const line of lines) {
+            if (line === "") flush();
+            else if (line.startsWith(":")) {
+              const comment = line.slice(1).trim();
+              log(comment === "ping" ? "ping" : "comment " + comment);
+            }
+            else if (line.startsWith("event:")) eventName = line.slice(6).trim();
+            else if (line.startsWith("data:")) data += line.slice(5).trim();
+          }
+        }
+        flush();
+        log("fetch stream ended cleanly");
+        if (!manual && gen === generation) {
+          setLink("reconnecting");
+          log("reconnecting after clean end");
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          if (!manual && gen === generation) connectFetch();
+          return;
+        }
+        setLink("closed");
+      } catch (error) {
+        if (manual || error.name === "AbortError") {
+          if (manual && gen === generation) setLink("closed");
+          return;
+        }
+        log("fetch error " + error.message);
+        setLink("closed");
+      }
+    }
+
+    function connect() {
+      stopCurrent();
+      manual = false;
+      connectionId = "";
+      serverHeartbeatMs = 0;
+      watchdog = 0;
+      lastByte = Date.now();
+      silenceLogged = false;
+      if ($("mode").value === "eventsource") connectEventSource();
+      else connectFetch();
+    }
+
+    function disconnect() {
+      stopCurrent();
+      setLink("closed");
+      log("disconnected by tester");
+    }
+
+    $("connect").onclick = connect;
+    $("disconnect").onclick = disconnect;
+    $("clear").onclick = () => { $("log").value = ""; };
+    $("copy").onclick = async () => {
+      $("log").select();
+      try {
+        await navigator.clipboard.writeText($("log").value);
+        log("log copied");
+      } catch {
+        log("clipboard blocked; the log text is selected, copy it by hand");
+      }
+    };
+
+    setInterval(() => {
+      if (!lastByte || (link !== "open" && link !== "silent")) {
+        $("silence").textContent = "—";
+        return;
+      }
+      const age = Date.now() - lastByte;
+      $("silence").textContent = Math.floor(age / 1000) + "s ago";
+      const heartbeat = serverHeartbeatMs;
+      if (watchdog === 0) {
+        const mark = heartbeat > 0 ? heartbeat : 20000;
+        if (age > mark && link === "open") {
+          setLink("silent");
+          if (!silenceLogged) {
+            silenceLogged = true;
+            log("no bytes for " + Math.floor(age / 1000) + "s; connection still open");
+          }
+        }
+        return;
+      }
+      if ($("mode").value !== "fetch" || heartbeat <= 0) return;
+      if (age > watchdog * heartbeat && (link === "open" || link === "silent")) {
+        log("no ping or status for " + watchdog + "×" + heartbeat + "ms, reconnecting");
+        connect();
+      }
+    }, 500);
+  </script>
+</body>
+</html>

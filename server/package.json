@@ -1,0 +1,9 @@
+{
+  "name": "bac-10368-sse-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test server.test.js"
+  }
+}

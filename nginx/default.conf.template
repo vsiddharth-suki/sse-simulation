@@ -1,0 +1,18 @@
+server {
+    listen 8080;
+    server_name _;
+
+    location / {
+        proxy_pass http://sse:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_max_temp_file_size 0;
+        gzip off;
+        proxy_read_timeout ${PROXY_READ_TIMEOUT};
+        proxy_send_timeout ${PROXY_READ_TIMEOUT};
+    }
+}

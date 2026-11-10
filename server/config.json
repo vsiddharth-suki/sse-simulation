@@ -1,0 +1,6 @@
+{
+  "heartbeatMs": 15000,
+  "plannedCloseMs": 0,
+  "statusEveryMs": 40000,
+  "watchdog": 2
+}
