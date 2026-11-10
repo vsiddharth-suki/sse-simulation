@@ -171,7 +171,16 @@ final class SseClient: ObservableObject {
         if let error, (error as NSError).code == NSURLErrorCancelled { return }
         if let error {
             log("URLSession error \(error.localizedDescription)")
-            link = .closed
+            guard !manual else {
+                link = .closed
+                return
+            }
+            link = .reconnecting
+            log("reconnecting after disconnect")
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                if !manual, gen == generation { self.connect() }
+            }
             return
         }
         guard !manual else {

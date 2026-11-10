@@ -136,11 +136,22 @@
         setLink("open");
         log("EventSource open readyState=" + es.readyState);
       };
+      let scheduled = false;
       es.onerror = () => {
-        if (gen !== generation) return;
+        if (gen !== generation || manual) return;
         log("EventSource error readyState=" + es.readyState + " (0=connecting, 1=open, 2=closed)");
-        if (es.readyState === EventSource.CONNECTING) setLink("reconnecting");
-        if (es.readyState === EventSource.CLOSED) setLink("closed");
+        if (es.readyState === EventSource.CONNECTING) {
+          setLink("reconnecting");
+          return;
+        }
+        if (es.readyState === EventSource.CLOSED && !scheduled) {
+          scheduled = true;
+          setLink("reconnecting");
+          log("reconnecting after disconnect");
+          setTimeout(() => {
+            if (!manual && gen === generation) connect();
+          }, 300);
+        }
       };
       es.addEventListener("hello", (event) => {
         noteByte();
@@ -211,7 +222,14 @@
           return;
         }
         log("fetch error " + error.message);
-        setLink("closed");
+        if (manual || gen !== generation) {
+          setLink("closed");
+          return;
+        }
+        setLink("reconnecting");
+        log("reconnecting after disconnect");
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        if (!manual && gen === generation) connectFetch();
       }
     }
 
