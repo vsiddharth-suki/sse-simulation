@@ -9,7 +9,7 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("This screen is the app. Statuses arrive on their own. The simulator uses the Mac network and cannot switch to cellular.")
+                    Text("This screen is the app. Statuses arrive on their own.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Text("State: \(client.link.rawValue) · last byte \(client.link == .open || client.link == .silent ? "\(client.silenceSeconds)s ago" : "—") · last_seq \(client.lastSeq.isEmpty ? "—" : client.lastSeq)")
@@ -39,8 +39,11 @@ struct ContentView: View {
                 Button("Connect", action: client.connect)
                 Button("Disconnect", action: client.disconnect)
             }
-            Button("Copy log") {
-                UIPasteboard.general.string = client.logText
+            HStack {
+                Button("Copy log") {
+                    UIPasteboard.general.string = client.logText
+                }
+                Button("Clear log") { client.clearLog() }
             }
         }
         .buttonStyle(.bordered)

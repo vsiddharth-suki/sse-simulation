@@ -76,6 +76,10 @@ final class SseClient: ObservableObject {
         log("scene \(phase)")
     }
 
+    func clearLog() {
+        logText = ""
+    }
+
     private func startStream(generation gen: Int, seq: String) {
         guard let url = streamURL(seq: seq) else {
             log("bad URL")

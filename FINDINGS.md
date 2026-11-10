@@ -1,13 +1,13 @@
 # Findings
 
-Fill this after the runs in [RUNBOOK.md](RUNBOOK.md). Leave a line blank if that run was not done. Experiment B is Chrome on the Android phone. The iOS results are from the simulator on the Mac’s network, not from a phone changing radios.
+Fill this after the runs in [RUNBOOK.md](RUNBOOK.md). Leave a line blank if that run was not done. Experiment B is Chrome on the Android phone and Safari on the iPhone.
 
 ## Answers
 
 1. Without a ping, does the connection die while the client still shows open?
    - Web EventSource:
    - Web fetch, watchdog off:
-   - iOS simulator, watchdog off:
+   - iPhone app, watchdog off:
 
 2. Which ping interval kept the connection alive past the idle cut?
    - nginx 60s:

@@ -19,7 +19,7 @@ PROXY_READ_TIMEOUT=300s docker compose up --build
 ```
 
 4. Desktop Chrome on the Mac: http://127.0.0.1:8080
-5. iOS app: open `ios/SseSpike.xcodeproj` and run SseSpike. It always uses `http://127.0.0.1:8080`. The app reaches the Mac through that address. It cannot use cellular.
+5. iPhone: install SseSpike from `ios/SseSpike.xcodeproj` onto the phone. Safari on that phone uses the same addresses as Android Chrome.
 6. Android phone/iPhone, same Wi-Fi as the Mac: http://<mac-lan-ip>:8080
    Find the address with `ipconfig getifaddr en0`.
 
@@ -27,7 +27,7 @@ Server lines are appended to `runs/server.jsonl`. Each client has a Copy log but
 
 ## Who is who
 
-- The web page and the iOS app are the **client**. Connect opens the stream. Disconnect closes it. The log prints each ambient note status as it arrives.
+- The web page and the iPhone app are the **client**. Connect opens the stream. Disconnect closes it. The log prints each ambient note status as it arrives.
 - **nginx** is ms-gateway.
 - The Node process is ms-notifications. It holds the stream.
 - A timer in that process is ms-jobber. It sends `ambient note 1234: IN_PROGRESS`, then the same note as `SUCCESS`, then starts another note.
@@ -37,7 +37,7 @@ Server lines are appended to `runs/server.jsonl`. Each client has a Copy log but
 Heartbeat and planned close are not on the page. Edit `server/config.json`, then start the stack again:
 
 - `heartbeatMs`: one heartbeat interval. Default `15000`. `0` turns the silence timer off.
-- `watchdog`: `0`, `2`, or `3`. The server and the client both learn this from `server/config.json`. The server tells the client in the hello frame. It is not a control on the page or in the iOS app. `0` means the server never pings and the client does not reconnect on silence. `2` or `3` means: if no status arrives for that many heartbeat intervals, the server writes a ping. If the client has received neither a ping nor a status for that same time, it reconnects with its last seq. A status resets the wait.
+- `watchdog`: `0`, `2`, or `3`. The server and the client both learn this from `server/config.json`. The server tells the client in the hello frame. It is not a control on the page or in the iPhone app. `0` means the server never pings and the client does not reconnect on silence. `2` or `3` means: if no status arrives for that many heartbeat intervals, the server writes a ping. If the client has received neither a ping nor a status for that same time, it reconnects with its last seq. A status resets the wait.
 - `plannedCloseMs`: how long until the server ends the stream on purpose. `0` leaves it open. Default `0`.
 - `statusEveryMs`: how often jobber sends the next ambient status. Default `5000`.
 
@@ -53,7 +53,7 @@ The command prints an `https://….trycloudflare.com` URL. The tunnel itself oft
 
 ## A. Heartbeat on and off
 
-Do this on desktop Chrome (EventSource and fetch) and on the iOS app. Use the LAN or localhost URL. Start with nginx at 60s. Repeat one passing case at 300s.
+Do this on desktop Chrome (EventSource and fetch) and on the iPhone app. Use the LAN or localhost URL. Start with nginx at 60s. Repeat one passing case at 300s.
 
 ### A1, heartbeat off, watchdog off
 
@@ -86,14 +86,14 @@ For each, record:
 
 ## C. Planned close and hard kill
 
-Desktop Chrome, Android Chrome, and the iOS app.
+Desktop Chrome, Android Chrome, iPhone Safari, and the iPhone app.
 
 1. Set `plannedCloseMs` to `60000`, start the stack again, and connect. After about 60 seconds the server ends the stream. The page connects again on its own and `received` lines continue.
 2. Set `plannedCloseMs` back to `0` and start again. To imitate a hard cut, stop the `sse` container while the page is connected (`docker compose stop sse`). Record whether the client sees an error immediately or stays open until the watchdog fires.
 
 ## What to write down every time
 
-- Client: EventSource, fetch, or iOS app
+- Client: EventSource, fetch, or iPhone app
 - URL shape: localhost, LAN, or cloudflared
 - nginx timeout: 60s or 300s
 - Heartbeat and watchdog settings

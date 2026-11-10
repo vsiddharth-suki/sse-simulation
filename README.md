@@ -2,7 +2,7 @@
 
 Throwaway harness for the heartbeat and reconnect tests. It is not the production notifications service.
 
-The Mac runs the mock server and nginx. The Mac does not change networks. Android Chrome does the Wi-Fi and cellular runs. The iOS simulator only covers the URLSession client on the Mac’s network.
+The Mac runs the mock server and nginx. The Mac does not change networks. Android Chrome and the iPhone do the Wi-Fi and cellular runs.
 
 Docker is required for nginx. Install Docker Desktop, then from this folder:
 

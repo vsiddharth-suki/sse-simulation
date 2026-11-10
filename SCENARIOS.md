@@ -7,7 +7,7 @@ Write the result in [FINDINGS.md](FINDINGS.md). Copy the client log and the matc
 Clients:
 
 - **Mac fetch** and **Mac EventSource**: Chrome or Safari at `http://127.0.0.1:8080`. Fetch is the app-style client. EventSource is the browser’s own client.
-- **iOS app**: the simulator app. It always uses `http://127.0.0.1:8080`. It stays on the Mac network.
+- **iPhone app**: SseSpike on an iPhone, on the same Wi-Fi as the Mac.
 - **Android Chrome** and **iPhone Safari**: the same web page. On Wi-Fi, use `http://<mac-lan-ip>:8080`. For a radio change, start on the `trycloudflare.com` address while still on Wi-Fi.
 
 `status 5s` means `statusEveryMs` `5000`. `status off` means `0`. `planned off` means `plannedCloseMs` `0`.
@@ -20,7 +20,7 @@ Server keeps sending ambient notes. Nobody pushes them from the page.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | S1 | Mac fetch | localhost | 60s | 15s | 0 | 5s | off | `received ambient note …` keeps arriving. No `ping`, because a status resets the wait. |
 | S2 | Mac EventSource | localhost | 60s | 15s | 0 | 5s | off | Same statuses. EventSource cannot show a comment `ping` even when the server sends one. |
-| S3 | iOS app | localhost | 60s | 15s | 0 | 5s | off | Same statuses in the simulator log. |
+| S3 | iPhone app | LAN | 60s | 15s | 0 | 5s | off | Same statuses in the iPhone app log. |
 | S4 | Android Chrome, fetch | LAN | 60s | 15s | 0 | 5s | off | Same statuses on the phone, still on Wi-Fi. |
 | S5 | iPhone Safari, fetch | LAN | 60s | 15s | 0 | 5s | off | Same statuses on the iPhone, still on Wi-Fi. |
 | S6 | Android Chrome, fetch | cloudflared | 60s | 15s | 0 | 5s | off | Whether any `received` line appears. The temporary tunnel does not support this kind of stream. |
@@ -34,24 +34,24 @@ No statuses and no pings. nginx is the only thing that can cut the stream.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Q1 | Mac fetch | localhost | 60s | 15s | 0 | off | off | Around 15s: `no bytes for …; connection still open`. Around 60s: browser error such as `Load failed`. State goes closed. No reconnect. |
 | Q2 | Mac EventSource | localhost | 60s | 15s | 0 | off | off | Whether the browser reconnects by itself after the 60s cut, and whether the state stays open with no new bytes. |
-| Q3 | iOS app | localhost | 60s | 15s | 0 | off | off | Around 60s URLSession may log `stream ended cleanly` and reconnect with the saved seq. That is the app treating nginx’s cut as a normal end. |
+| Q3 | iPhone app | LAN | 60s | 15s | 0 | off | off | Around 60s URLSession may log `stream ended cleanly` and reconnect with the saved seq. That is the app treating nginx’s cut as a normal end. |
 | Q4 | Mac fetch | localhost | 300s | 15s | 0 | off | off | Same as Q1, with the cut near 300s. |
-| Q5 | iOS app | localhost | 300s | 15s | 0 | off | off | Same as Q3, with the cut near 300s. |
+| Q5 | iPhone app | LAN | 300s | 15s | 0 | off | off | Same as Q3, with the cut near 300s. |
 | Q6 | Android Chrome, fetch | cloudflared | 300s | 15s | 0 | off | off | Which hop dies first. The tunnel often cuts a quiet stream near 100s, before nginx at 300s. |
 | Q7 | iPhone Safari, fetch | cloudflared | 300s | 15s | 0 | off | off | Same as Q6 on the iPhone. |
 
 ## 3. Server ping and client watchdog
 
-A ping is sent only after `watchdog × heartbeat` with no status. The client reconnects on its own only when it has gone that same time with neither a ping nor a status. Fetch and the iOS app can see a comment ping. EventSource cannot.
+A ping is sent only after `watchdog × heartbeat` with no status. The client reconnects on its own only when it has gone that same time with neither a ping nor a status. Fetch and the iPhone app can see a comment ping. EventSource cannot.
 
 | ID | Client | Path | nginx | heartbeat | watchdog | status | planned | Look for |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | P1 | Mac fetch | localhost | 60s | 15s | 2 | off | off | `ping` about every 30s. No `received` line. Stream still open past 60s if the ping keeps nginx satisfied. |
 | P2 | Mac fetch | localhost | 60s | 15s | 3 | off | off | `ping` about every 45s. Same question as P1 against the 60s cut. |
 | P3 | Mac EventSource | localhost | 60s | 15s | 3 | off | off | No `ping` line in the page log. Record whether the browser still stays up, and whether it reconnects because it never saw the ping. |
-| P4 | iOS app | localhost | 60s | 15s | 3 | off | off | `ping` about every 45s. Record whether the simulator stays open past 60s. |
+| P4 | iPhone app | LAN | 60s | 15s | 3 | off | off | `ping` about every 45s. Record whether the iPhone stays open past 60s. |
 | P5 | Mac fetch | localhost | 300s | 15s | 3 | off | off | Whether a 45s ping keeps the stream open past 300s. |
-| P6 | iOS app | localhost | 300s | 15s | 3 | off | off | Same as P5 on the simulator. |
+| P6 | iPhone app | LAN | 300s | 15s | 3 | off | off | Same as P5 on the iPhone. |
 | P7 | Mac fetch | localhost | 60s | 15s | 3 | 5s | off | Statuses every 5s and no `ping`. A status starts the 45s wait over. |
 | P8 | Mac fetch | localhost | 60s | 0 | 3 | off | off | No `ping` and no watchdog reconnect. Heartbeat `0` turns the silence timer off. |
 
@@ -61,25 +61,25 @@ A ping is sent only after `watchdog × heartbeat` with no status. The client rec
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | Mac fetch | localhost | 60s | 15s | 0 | 5s | 60s | Around 60s: `comment bye`, then `fetch stream ended cleanly`, then a new connect with the same `last_seq`. Statuses continue. |
 | C2 | Mac EventSource | localhost | 60s | 15s | 0 | 5s | 60s | Whether the browser reconnects by itself after `bye`, and whether the cursor moves. |
-| C3 | iOS app | localhost | 60s | 15s | 0 | 5s | 60s | `comment bye`, then `stream ended cleanly`, then a new connect with the saved seq. |
+| C3 | iPhone app | LAN | 60s | 15s | 0 | 5s | 60s | `comment bye`, then `stream ended cleanly`, then a new connect with the saved seq. |
 | C4 | Android Chrome, fetch | LAN | 60s | 15s | 0 | 5s | 60s | Same clean reconnect on the phone. |
 | C5 | iPhone Safari, fetch | LAN | 60s | 15s | 0 | 5s | 60s | Same clean reconnect on the iPhone. |
 | K1 | Mac fetch | localhost | 60s | 15s | 0 | 5s | off | While connected, run `docker compose stop sse`. Record an immediate error, or a state that stays open with no new statuses. No reconnect from the watchdog. |
 | K2 | Mac fetch | localhost | 60s | 15s | 3 | off | off | Same hard stop. After about 45s with no ping and no status, the page reconnects with the saved seq. The new connect fails until `sse` is started again. |
-| K3 | iOS app | localhost | 60s | 15s | 3 | off | off | Same hard stop. Record whether the simulator reconnects at 45s or treats the cut as a clean end sooner. |
+| K3 | iPhone app | LAN | 60s | 15s | 3 | off | off | Same hard stop. Record whether the iPhone reconnects at 45s or treats the cut as a clean end sooner. |
 
 Start `sse` again after K1–K3 (`docker compose start sse`, or bring the whole stack back).
 
 ## 5. Saved seq
 
-The page keeps `last_seq` for the life of the tab. The iOS app keeps it until the app is deleted. Connect always sends that number. A ping does not change it.
+The page keeps `last_seq` for the life of the tab. The iPhone app keeps it until the app is deleted. Connect always sends that number. A ping does not change it.
 
 | ID | Client | Path | Setup | What you do | Look for |
 | --- | --- | --- | --- | --- | --- |
 | R1 | Mac fetch | localhost | status 5s, watchdog 0, planned off | Connect, wait for a few `received` lines, Disconnect, Connect again | The second open shows `last_seq` and `Last-Event-ID` equal to the last status. The log does not reprint older notes. |
 | R2 | Mac fetch | localhost | same as R1 | Reload the tab, then Connect | The same seq is still there. |
 | R3 | Mac fetch | localhost | same as R1 | Close the tab, open a new one, Connect | No `last_seq`. Old notes are not replayed. |
-| R4 | iOS app | localhost | same as R1 | Connect, receive a few notes, stop the app, launch it again, Connect | The seq is still on screen and is sent again. |
+| R4 | iPhone app | LAN | same as R1 | Connect, receive a few notes, stop the app, launch it again, Connect | The seq is still on screen and is sent again. |
 | R5 | Android Chrome, fetch | LAN | same as R1 | Same steps as R1 | Same cursor behavior on the phone. |
 | R6 | iPhone Safari, fetch | LAN | same as R1 | Same steps as R1 | Same cursor behavior on the iPhone. |
 
