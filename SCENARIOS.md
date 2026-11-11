@@ -7,7 +7,7 @@ Write the result in [FINDINGS.md](FINDINGS.md). Copy the client log and the matc
 Clients:
 
 - **Mac fetch** and **Mac EventSource**: Chrome or Safari at `http://127.0.0.1:8080`. Fetch is the app-style client. EventSource is the browser’s own client.
-- **iPhone app**: SseSpike on an iPhone, on the same Wi-Fi as the Mac.
+- **iPhone app**: SseSpike on an iPhone. On the same Wi-Fi as the Mac use `http://<mac-lan-ip>:8080`. For cellular or tunnel runs, paste the `trycloudflare.com` base URL into the app.
 - **Android Chrome** and **iPhone Safari**: the same web page. On Wi-Fi, use `http://<mac-lan-ip>:8080`. For a radio change, start on the `trycloudflare.com` address while still on Wi-Fi.
 
 `status 5s` means `statusEveryMs` `5000`. `status off` means `0`. `planned off` means `plannedCloseMs` `0`.
@@ -25,6 +25,7 @@ Server keeps sending ambient notes. Nobody pushes them from the page.
 | S5 | iPhone Safari, fetch | LAN | 60s | 15s | 0 | 5s | off | Same statuses on the iPhone, still on Wi-Fi. |
 | S6 | Android Chrome, fetch | cloudflared | 60s | 15s | 0 | 5s | off | Whether any `received` line appears. The temporary tunnel does not support this kind of stream. |
 | S7 | iPhone Safari, fetch | cloudflared | 60s | 15s | 0 | 5s | off | Same check as S6 on the iPhone. |
+| S8 | iPhone app | cloudflared | n/a (Node only) | 15s | 0 | 5s | off | Whether `received ambient note …` appears over the quick tunnel in SseSpike. |
 
 ## 2. Quiet stream, no ping
 
@@ -64,6 +65,7 @@ A ping is sent only after `watchdog × heartbeat` with no status. The client rec
 | C3 | iPhone app | LAN | 60s | 15s | 0 | 5s | 60s | `comment bye`, then `stream ended cleanly`, then a new connect with the saved seq. |
 | C4 | Android Chrome, fetch | LAN | 60s | 15s | 0 | 5s | 60s | Same clean reconnect on the phone. |
 | C5 | iPhone Safari, fetch | LAN | 60s | 15s | 0 | 5s | 60s | Same clean reconnect on the iPhone. |
+| C6 | iPhone app | cloudflared | n/a (Node only) | 15s | 0 | 5s | 5s | Dress rehearsal of C3 over the tunnel: `comment bye` about every 5s, clean end, auto-reconnect with advancing `last_seq` / `Last-Event-ID`. |
 | K1 | Mac fetch | localhost | 60s | 15s | 0 | 5s | off | While connected, run `docker compose stop sse`. Record an immediate error, or a state that stays open with no new statuses. No reconnect from the watchdog. |
 | K2 | Mac fetch | localhost | 60s | 15s | 3 | off | off | Same hard stop. After about 45s with no ping and no status, the page reconnects with the saved seq. The new connect fails until `sse` is started again. |
 | K3 | iPhone app | LAN | 60s | 15s | 3 | off | off | Same hard stop. Record whether the iPhone reconnects at 45s or treats the cut as a clean end sooner. |
@@ -108,3 +110,9 @@ Do each row twice: once with **quiet** settings (`heartbeat 15s`, `watchdog 0`, 
 - Time of connect, time of the last byte, time of the error or reconnect
 - Whether `received` lines continued, stopped while the state stayed open, or resumed after a reconnect
 - The `last_seq` sent on the next connect
+
+## Results (recorded)
+
+| ID | When (UTC) | Settings | Result |
+| --- | --- | --- | --- |
+| S8 / C6 | 2026-11-11 ~06:12–06:14 | iPhone app, cloudflared (`build-hydrogen-hoping-host.trycloudflare.com`), heartbeat 15s, watchdog 0, status 5s, planned 5s, Node only (no nginx) | **Pass.** Statuses arrived over the quick tunnel. On each planned close: `comment bye` → `URLSession stream ended cleanly` → `reconnecting after clean end` → new `URLSession open` with advancing `last_seq` / `Last-Event-ID` (58 → 84). Client identifies the server drop and auto-reconnects with cursor. |

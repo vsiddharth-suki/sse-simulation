@@ -32,4 +32,4 @@ Evidence:
 
 | When (UTC) | Client | Path | nginx timeout | Heartbeat | Watchdog | What happened |
 | --- | --- | --- | --- | --- | --- | --- |
-| | | | | | | |
+| 2026-11-11 ~06:12–06:14 | iPhone app (S8/C6) | cloudflared | n/a (Node only) | 15s | 0 | Planned close 5s. `received` notes over tunnel. Each cycle: `bye` → clean end → auto-reconnect with advancing `last_seq` (58→84). |
